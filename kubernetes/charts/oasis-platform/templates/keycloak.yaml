@@ -24,9 +24,9 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ $realmSecretName }}
+  name: ms-azure-postgres-cert
 data:
-  ms-azure-postgres-cert: |
+  file-postgres-cert: |
     -----BEGIN CERTIFICATE-----
     MIIDrzCCApegAwIBAgIQCDvgVpBCRrGhdWrJWZHHSjANBgkqhkiG9w0BAQUFADBh
     MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3
@@ -49,7 +49,12 @@ data:
     YSEY1QSteDwsOoBrp+uvFRTp2InBuThs4pFsiv9kuXclVzDAGySj4dzp30d8tbQk
     CAUw7C29C79Fv1C5qfPrmAESrciIxpg0X40KPMbp1ZWVbd4=
     -----END CERTIFICATE-----
-
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $realmSecretName }}
+data:
   oasis: |-
     {{- $userTemplate := .Files.Get "resources/oasis-realm-user.json" }}
     {{- $userJson := list -}}
@@ -122,6 +127,8 @@ spec:
           ports:
             - containerPort: {{ .Values.keycloak.port }}
           env:
+            - name: KC_DB_URL_PROPERTIES
+              value: "?sslmode=verify-full"
             - name: KC_LOGLEVEL
               value: DEBUG
             - name: PROXY_ADDRESS_FORWARDING
@@ -195,7 +202,7 @@ spec:
           volumeMounts:
             - name: azure-cert
               mountPath: /opt/keycloak/.postgresql/root.crt
-              subPath: ms-azure-postgres-cert
+              subPath: file-postgres-cert
             - name: realm-config
               mountPath: /opt/keycloak/data/import/oasis-realm.json
               subPath: oasis
@@ -203,10 +210,7 @@ spec:
       volumes:
         - name: azure-cert
           configMap:
-            name: azure-cert
-            items:
-              - key: ms-azure-postgres-cert
-                path: root.crt
+            name: ms-azure-postgres-cert
         - name: realm-config
           configMap:
             name: {{ $realmSecretName }}
