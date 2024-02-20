@@ -128,7 +128,7 @@ spec:
             - containerPort: {{ .Values.keycloak.port }}
           env:
             - name: KC_DB_URL_PROPERTIES
-              value: "?sslmode=verify-full"
+              value: "?sslmode=verify-full&sslcert=root.crt"
             - name: KC_LOGLEVEL
               value: DEBUG
             - name: PROXY_ADDRESS_FORWARDING
