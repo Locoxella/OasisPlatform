@@ -73,7 +73,7 @@ kind: ConfigMap
 metadata:
   name: keycloak-vault
 data:
-  keycloak-cert: "$(cat /opt/keycloak/data/import/oasis-realm.json)"
+  keycloak-cert: "$(cat /opt/keycloak/.postgresql/root.crt/keycloak-cert.pem)"
 
 ---
 apiVersion: v1
@@ -223,13 +223,16 @@ spec:
             failureThreshold: 2
           volumeMounts:
             - name: azure-kv-secret
-              mountPath: /opt/keycloak/data/import/oasis-realm.json
+              mountPath: /opt/keycloak/.postgresql/root.crt 
               subPath: keycloak-cert.pem
             - name: realm-config
-              mountPath: /opt/keycloak/.postgresql/root.crt
+              mountPath: /opt/keycloak/data/import/oasis-realm.json
               subPath: oasis
 
       volumes:
+        - name: vault-cert
+          configmap:
+            name: keycloak-vault
           secret:
             secretName: azure-kv-secret
 {{- if (.Values.azure).secretProvider }}
