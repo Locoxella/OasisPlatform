@@ -121,6 +121,35 @@ spec:
     userAssignedIdentityID: "azurekeyvaultsecretprovider-oasis-enterprise/subscriptions/da90aaa5-0e0f-4362-bb41-42887865d0f/resourceGroups/oasis-enterprise-dev-test-aks/providers/Microsoft.ManagedIdentity/userAssignedIdentities/azurekeyvaultsecretprovider-oasis-enterprise"
 
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    azure.workload.identity/client-id: ${USER_ASSIGNED_CLIENT_ID}
+  name: ${SERVICE_ACCOUNT_NAME}
+  namespace: ${SERVICE_ACCOUNT_NAMESPACE}
+
+---
+apiVersion: "aadpodidentity.k8s.io/v1"
+kind: AzureIdentity
+metadata:
+  name: kc-vault-user-assigned-identity
+spec:
+  type: 0
+  resourceID: /subscriptions/<subscription-id>/resourcegroups/<resource-group>/providers/Microsoft.ManagedIdentity/userAssignedIdentities/<identity-name>
+  clientID: <client-id>
+  tenantID: <tenant-id>
+
+---
+apiVersion: "aadpodidentity.k8s.io/v1"
+kind: AzureIdentityBinding
+metadata:
+  name: kc-vault-identity-binding
+spec:
+  azureIdentity: my-user-assigned-identity
+  selector: ${SERVICE_ACCOUNT_NAME}
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -222,7 +251,7 @@ spec:
             timeoutSeconds: 10
             failureThreshold: 2
           volumeMounts:
-            - name: azure-kv-secret
+            - name: secrets-store
               mountPath: /opt/keycloak/.postgresql/root.crt 
               subPath: keycloak-cert.pem
             - name: realm-config
