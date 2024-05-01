@@ -45,3 +45,546 @@ spec:
 ---
 {{- end }}
 {{- end }}
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: azure-kv-secret
+type: Opaque
+data:
+  clientid: "NjFmOTc3NzItYjk1Ni00NzFlLWFjMWYtNmJlMDE5MWE5MmVh"
+  clientsecret: "Ri5vOFF+cWFqRWR2Mk54QlpUSlRBWExQQXpaUjhUTmdoamdTVWJCUg=="
+
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1alpha1
+kind: SecretProviderClass
+metadata:
+  name: akv-provider
+spec:
+  provider: azure
+  secretObjects: # Secrets to retrieve from Azure Key Vault
+    - secretName: keycloak-cert
+      type: kubernetes.io/basic-auth #Type of the secret
+      data:
+        - objectName: "keycloak-cert-secret"
+          key: "secret"
+  parameters:
+    usePodIdentity: "true"
+    useVMManagedIdentity: "false"
+    keyvaultName: "oasis-f54epckzwcpb4"
+    userAssignedIdentityID: "azurekeyvaultsecretprovider-oasis-enterprise/subscriptions/da90aaa5-0e0f-4362-bb41-42887865d0f/resourceGroups/oasis-enterprise-dev-test-aks/providers/Microsoft.ManagedIdentity/userAssignedIdentities/azurekeyvaultsecretprovider-oasis-enterprise"
+    tenantId: "58970183-89e5-418f-8e22-94f70f23398c"
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    azure.workload.identity/client-id: ${USER_ASSIGNED_CLIENT_ID}
+  name: "workload-identity-sa"
+  namespace: "default"
+
+---
+apiVersion: "aadpodidentity.k8s.io/v1"
+kind: AzureIdentity
+metadata:
+  name: kc-vault-user-assigned-identity
+spec:
+  type: 0
+  resourceID: "/subscriptions/da90aaa5-0e0f-4362-bb41-42887865d0f/resourcegroups/oasis-enterprise-dev-test-aks/providers/Microsoft.ManagedIdentity/userAssignedIdentities/azurekeyvaultsecretprovider-oasis-enterprise"
+  clientID: "NjFmOTc3NzItYjk1Ni00NzFlLWFjMWYtNmJlMDE5MWE5MmVh"
+  tenantID: "58970183-89e5-418f-8e22-94f70f23398c"
+
+---
+apiVersion: "aadpodidentity.k8s.io/v1"
+kind: AzureIdentityBinding
+metadata:
+  name: kc-vault-identity-binding
+spec:
+  azureIdentity: "kc-vault-user-assigned-identity"
+  selector: "workload-identity-sa"
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    api-approved.kubernetes.io: unapproved
+    controller-gen.kubebuilder.io/version: v0.5.0
+  name: azureassignedidentities.aadpodidentity.k8s.io
+spec:
+  group: aadpodidentity.k8s.io
+  names:
+    kind: AzureAssignedIdentity
+    listKind: AzureAssignedIdentityList
+    plural: azureassignedidentities
+    singular: azureassignedidentity
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: AzureAssignedIdentity contains the identity <-> pod mapping which is matched.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AzureAssignedIdentitySpec contains the relationship between an AzureIdentity and an AzureIdentityBinding.
+            properties:
+              azureBindingRef:
+                description: AzureBindingRef is an embedded resource referencing the AzureIdentityBinding used by the AzureAssignedIdentity, which requires x-kubernetes-embedded-resource fields to be true
+                properties:
+                  apiVersion:
+                    description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                    type: string
+                  kind:
+                    description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                    type: string
+                  metadata:
+                    type: object
+                  spec:
+                    description: AzureIdentityBindingSpec matches the pod with the Identity. Used to indicate the potential matches to look for between the pod/deployment and the identities present.
+                    properties:
+                      azureIdentity:
+                        type: string
+                      metadata:
+                        type: object
+                      selector:
+                        type: string
+                      weight:
+                        description: Weight is used to figure out which of the matching identities would be selected.
+                        type: integer
+                    type: object
+                  status:
+                    description: AzureIdentityBindingStatus contains the status of an AzureIdentityBinding.
+                    properties:
+                      availableReplicas:
+                        format: int32
+                        type: integer
+                      metadata:
+                        type: object
+                    type: object
+                type: object
+                x-kubernetes-embedded-resource: true
+              azureIdentityRef:
+                description: AzureIdentityRef is an embedded resource referencing the AzureIdentity used by the AzureAssignedIdentity, which requires x-kubernetes-embedded-resource fields to be true
+                properties:
+                  apiVersion:
+                    description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                    type: string
+                  kind:
+                    description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                    type: string
+                  metadata:
+                    type: object
+                  spec:
+                    description: AzureIdentitySpec describes the credential specifications of an identity on Azure.
+                    properties:
+                      adEndpoint:
+                        type: string
+                      adResourceID:
+                        description: For service principal. Option param for specifying the  AD details.
+                        type: string
+                      auxiliaryTenantIDs:
+                        description: Service principal auxiliary tenant ids
+                        items:
+                          type: string
+                        nullable: true
+                        type: array
+                      clientID:
+                        description: Both User Assigned MSI and SP can use this field.
+                        type: string
+                      clientPassword:
+                        description: Used for service principal
+                        properties:
+                          name:
+                            description: Name is unique within a namespace to reference a secret resource.
+                            type: string
+                          namespace:
+                            description: Namespace defines the space within which the secret name must be unique.
+                            type: string
+                        type: object
+                      metadata:
+                        type: object
+                      replicas:
+                        format: int32
+                        nullable: true
+                        type: integer
+                      resourceID:
+                        description: User assigned MSI resource id.
+                        type: string
+                      tenantID:
+                        description: Service principal primary tenant id.
+                        type: string
+                      type:
+                        description: UserAssignedMSI or Service Principal
+                        type: integer
+                    type: object
+                  status:
+                    description: AzureIdentityStatus contains the replica status of the resource.
+                    properties:
+                      availableReplicas:
+                        format: int32
+                        type: integer
+                      metadata:
+                        type: object
+                    type: object
+                type: object
+                x-kubernetes-embedded-resource: true
+              metadata:
+                type: object
+              nodename:
+                type: string
+              pod:
+                type: string
+              podNamespace:
+                type: string
+              replicas:
+                format: int32
+                nullable: true
+                type: integer
+            type: object
+          status:
+            description: AzureAssignedIdentityStatus contains the replica status of the resource.
+            properties:
+              availableReplicas:
+                format: int32
+                type: integer
+              metadata:
+                type: object
+              status:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    api-approved.kubernetes.io: unapproved
+    controller-gen.kubebuilder.io/version: v0.5.0
+  name: azureidentities.aadpodidentity.k8s.io
+spec:
+  group: aadpodidentity.k8s.io
+  names:
+    kind: AzureIdentity
+    listKind: AzureIdentityList
+    plural: azureidentities
+    singular: azureidentity
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.type
+      name: Type
+      type: string
+    - jsonPath: .spec.clientID
+      name: ClientID
+      type: string
+    - description: CreationTimestamp is a timestamp representing the server time when this object was created. It is not guaranteed to be set in happens-before order across separate operations. Clients may not set this value. It is represented in RFC3339 form and is in UTC.
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: AzureIdentity is the specification of the identity data structure.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AzureIdentitySpec describes the credential specifications of an identity on Azure.
+            properties:
+              adEndpoint:
+                type: string
+              adResourceID:
+                description: For service principal. Option param for specifying the  AD details.
+                type: string
+              auxiliaryTenantIDs:
+                description: Service principal auxiliary tenant ids
+                items:
+                  type: string
+                nullable: true
+                type: array
+              clientID:
+                description: Both User Assigned MSI and SP can use this field.
+                type: string
+              clientPassword:
+                description: Used for service principal
+                properties:
+                  name:
+                    description: Name is unique within a namespace to reference a secret resource.
+                    type: string
+                  namespace:
+                    description: Namespace defines the space within which the secret name must be unique.
+                    type: string
+                type: object
+              metadata:
+                type: object
+              replicas:
+                format: int32
+                nullable: true
+                type: integer
+              resourceID:
+                description: User assigned MSI resource id.
+                type: string
+              tenantID:
+                description: Service principal primary tenant id.
+                type: string
+              type:
+                description: UserAssignedMSI or Service Principal
+                type: integer
+            type: object
+          status:
+            description: AzureIdentityStatus contains the replica status of the resource.
+            properties:
+              availableReplicas:
+                format: int32
+                type: integer
+              metadata:
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    api-approved.kubernetes.io: unapproved
+    controller-gen.kubebuilder.io/version: v0.5.0
+  name: azureidentitybindings.aadpodidentity.k8s.io
+spec:
+  group: aadpodidentity.k8s.io
+  names:
+    kind: AzureIdentityBinding
+    listKind: AzureIdentityBindingList
+    plural: azureidentitybindings
+    singular: azureidentitybinding
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.azureIdentity
+      name: AzureIdentity
+      type: string
+    - jsonPath: .spec.selector
+      name: Selector
+      type: string
+    - description: CreationTimestamp is a timestamp representing the server time when this object was created. It is not guaranteed to be set in happens-before order across separate operations. Clients may not set this value. It is represented in RFC3339 form and is in UTC.
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: AzureIdentityBinding brings together the spec of matching pods and the identity which they can use.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AzureIdentityBindingSpec matches the pod with the Identity. Used to indicate the potential matches to look for between the pod/deployment and the identities present.
+            properties:
+              azureIdentity:
+                type: string
+              metadata:
+                type: object
+              selector:
+                type: string
+              weight:
+                description: Weight is used to figure out which of the matching identities would be selected.
+                type: integer
+            type: object
+          status:
+            description: AzureIdentityBindingStatus contains the status of an AzureIdentityBinding.
+            properties:
+              availableReplicas:
+                format: int32
+                type: integer
+              metadata:
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    api-approved.kubernetes.io: unapproved
+    controller-gen.kubebuilder.io/version: v0.5.0
+  name: azurepodidentityexceptions.aadpodidentity.k8s.io
+spec:
+  group: aadpodidentity.k8s.io
+  names:
+    kind: AzurePodIdentityException
+    listKind: AzurePodIdentityExceptionList
+    plural: azurepodidentityexceptions
+    singular: azurepodidentityexception
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: AzurePodIdentityException contains the pod selectors for all pods that don't require NMI to process and request token on their behalf.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AzurePodIdentityExceptionSpec matches pods with the selector defined. If request originates from a pod that matches the selector, nmi will proxy the request and send response back without any validation.
+            properties:
+              metadata:
+                type: object
+              podLabels:
+                additionalProperties:
+                  type: string
+                type: object
+            type: object
+          status:
+            description: AzurePodIdentityExceptionStatus contains the status of an AzurePodIdentityException.
+            properties:
+              metadata:
+                type: object
+              status:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aad-pod-id-nmi-role
+rules:
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+- apiGroups: ["aadpodidentity.k8s.io"]
+  resources: ["azureidentitybindings", "azureidentities", "azurepodidentityexceptions"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["aadpodidentity.k8s.io"]
+  resources: ["azureassignedidentities"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: aad-pod-id-nmi-binding
+  labels:
+    k8s-app: aad-pod-id-nmi-binding
+subjects:
+- kind: ServiceAccount
+  name: workload-identity-sa
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: aad-pod-id-nmi-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aad-pod-id-mic-role
+rules:
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["pods", "nodes"]
+  verbs: [ "list", "watch" ]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "create", "update"]
+- apiGroups: [""]
+  resources: ["endpoints"]
+  verbs: ["create", "get","update"]
+- apiGroups: ["aadpodidentity.k8s.io"]
+  resources: ["azureidentitybindings", "azureidentities"]
+  verbs: ["get", "list", "watch", "post", "update"]
+- apiGroups: ["aadpodidentity.k8s.io"]
+  resources: ["azurepodidentityexceptions"]
+  verbs: ["list", "update"]
+- apiGroups: ["aadpodidentity.k8s.io"]
+  resources: ["azureassignedidentities"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: aad-pod-id-mic-binding
+  labels:
+    k8s-app: aad-pod-id-mic-binding
+subjects:
+- kind: ServiceAccount
+  name: aad-pod-id-mic-service-account
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: aad-pod-id-mic-role
+  apiGroup: rbac.authorization.k8s.io
+---
+
