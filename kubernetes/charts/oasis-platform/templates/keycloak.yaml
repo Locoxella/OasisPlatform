@@ -92,6 +92,33 @@ spec:
     {{- include "h.selectorLabels" . | nindent 4 }}
     app: {{ .Values.keycloak.name }}
 ---
+apiVersion: secrets-store.csi.x-k8s.io/v1alpha1
+kind: SecretProviderClass
+metadata:
+  name: azure-secret-provider
+spec:
+  provider: azure
+  secretObjects: # Secrets to retrieve from Azure Key Vault
+    - secretName: keycloak-cert
+      type: kubernetes.io/basic-auth #Type of the secret
+      data:
+        - objectName: "keycloak-cert-secret"
+          key: "secret"
+  parameters:
+    usePodIdentity: "true"
+    useVMManagedIdentity: "false"
+    keyvaultName: "oasis-f54epckzwcpb4"
+    userAssignedIdentityID: "azurekeyvaultsecretprovider-oasis-enterprise/subscriptions/da90aaa5-0e0f-4362-bb41-42887865d0f/resourceGroups/oasis-enterprise-dev-test-aks/providers/Microsoft.ManagedIdentity/userAssignedIdentities/azurekeyvaultsecretprovider-oasis-enterprise"
+    tenantId: "58970183-89e5-418f-8e22-94f70f23398c"
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    azure.workload.identity/client-id: ${USER_ASSIGNED_CLIENT_ID}
+  name: "workload-identity-sa"
+  namespace: "default"
 
 ---
 apiVersion: apps/v1
@@ -209,12 +236,17 @@ spec:
 #           secret:
 #             secretName: azure-kv-secret
 # {{- if (.Values.azure).secretProvider }}
-        - name: secrets-store
+        - name: secrets-store 
+          configMap:
+            name: keycloak-vault         
+        {{- if (.Values.azure).secretProvider }}
+        - name: azure-vault-provider
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes:
-              secretProviderClass: "akv-provider"
+              secretProviderClass: "azure-secret-provider"
+  {{- end }}
 #{{- end }}
         - name: realm-config
           configMap:
