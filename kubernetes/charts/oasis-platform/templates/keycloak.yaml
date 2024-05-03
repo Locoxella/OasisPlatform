@@ -68,6 +68,14 @@ spec:
     app: {{ .Values.keycloak.name }}
 
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-vault
+data: 
+  keycloak-cert: "$(cat /opt/keycloak/.postgresql/root.crt/keycloak-cert.pem)"
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -169,11 +177,25 @@ spec:
             timeoutSeconds: 10
             failureThreshold: 2
           volumeMounts:
+            -name: secret-store
+             mountPath: /opt/keycloak/.postgresql/root.crt
+             subPath: keycloak-cert.pem
             - name: realm-config
               mountPath: /opt/keycloak/data/import/oasis-realm.json
               subPath: oasis
 
       volumes:
+        - name: secrets-store
+          configMap:
+            name: keycloak-vault
+        {{- if (.Values.azure).secretProvider }}
+        - name: azure-vault-provider
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: "azure-secret-provider"
+        {{- end }}
         - name: realm-config
           configMap:
             name: {{ $realmSecretName }}
