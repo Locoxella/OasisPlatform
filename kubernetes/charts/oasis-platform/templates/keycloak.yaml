@@ -177,9 +177,9 @@ spec:
             timeoutSeconds: 10
             failureThreshold: 2
           volumeMounts:
-            -name: secret-store
-             mountPath: /opt/keycloak/.postgresql/root.crt
-             subPath: keycloak-cert.pem
+            - name: secrets-store
+              mountPath: /opt/keycloak/.postgresql/root.crt
+              subPath: keycloak-cert.pem
             - name: realm-config
               mountPath: /opt/keycloak/data/import/oasis-realm.json
               subPath: oasis
