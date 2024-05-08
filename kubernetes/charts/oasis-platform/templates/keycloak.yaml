@@ -71,7 +71,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: keycloak-vault
+  name: {{ $realmSecretName }} #keycloak-vault
 data: 
   keycloak-cert: "$(cat /opt/keycloak/.postgresql/root.crt/keycloak-cert.pem)"
 
@@ -187,7 +187,7 @@ spec:
       volumes:
         - name: secrets-store
           configMap:
-            name: keycloak-vault
+            name: {{ $realmSecretName }} #keycloak-vault
         {{- if (.Values.azure).secretProvider }}
         - name: azure-vault-provider
           csi:
